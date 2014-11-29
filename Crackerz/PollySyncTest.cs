@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using NFluent;
+using Polly;
 
 namespace Crackerz
 {
@@ -32,7 +33,7 @@ namespace Crackerz
             var idx = 0;
             mock.Setup(a => a.DoSomethingCrucial(It.IsAny<int>()))
                 .Returns((int a) => behaviors[idx].Invoke(a))
-                .Callback(() => idx++);
+                .Callback((int a) => idx++);
 
             return mock.Object;
         }
@@ -53,7 +54,71 @@ namespace Crackerz
         }
 
         [TestMethod]
+        public void TwoSuccessesSucceed()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => a + 1,
+                                a => a - 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            Check.That(service.DoSomethingCrucial(7))
+                 .Equals(8);
+
+            Check.That(service.DoSomethingCrucial(7))
+                 .Equals(6);
+        }
+
+        [TestMethod]
         public void FailFails()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => a + 1
+                            };
+
+            var service = GetService(behaviors);
+
+            Check.ThatCode(() =>
+                           {
+                               service.DoSomethingCrucial(7);
+                           })
+                 .Throws<UnoException>();
+        }
+
+        [TestMethod]
+        public void SingleRetryNotNeeded()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => a + 1,
+                                a => a - 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry();
+
+            var result = policy.Execute(() => service.DoSomethingCrucial(7));
+
+            Check.That(result)
+                 .Equals(8);
+
+            result = policy.Execute(() => service.DoSomethingCrucial(7));
+
+            Check.That(result)
+                 .Equals(6);
+        }
+
+        [TestMethod]
+        public void SingleRetryNeeded()
         {
             var behaviors = new List<Func<int, int>>
                             {
@@ -64,14 +129,14 @@ namespace Crackerz
 
             var service = GetService(behaviors);
 
-            Check.ThatCode(() =>
-                           {
-                               service.DoSomethingCrucial(7);
-                           })
-                 .Throws<UnoException>();
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(1);
 
+            var result = policy.Execute(() => service.DoSomethingCrucial(7));
+
+            Check.That(result)
+                 .Equals(8);
         }
-
-
     }
 }
