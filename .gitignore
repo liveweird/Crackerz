@@ -1,0 +1,5 @@
+Crackerz/obj/
+packages/
+Crackerz/bin/Debug/Polly.xml
+*.ncrunchproject
+*.ncrunchsolution
