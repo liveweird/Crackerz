@@ -14,11 +14,11 @@ namespace Crackerz
 
     public class UnoException : Exception { }
 
-    public class DueException : Exception
+    public class DosException : Exception
     {
         public int Code { get; set; }
 
-        public DueException(int code)
+        public DosException(int code)
         {
             Code = code;
         }
@@ -30,10 +30,10 @@ namespace Crackerz
         IHighlyAvailableService GetService(List<Func<int, int>> behaviors)
         {
             var mock = new Mock<IHighlyAvailableService>();
-            var idx = 0;
+            var idx = -1;
             mock.Setup(a => a.DoSomethingCrucial(It.IsAny<int>()))
-                .Returns((int a) => behaviors[idx].Invoke(a))
-                .Callback((int a) => idx++);
+                .Callback((int a) => idx++)
+                .Returns((int a) => behaviors[idx].Invoke(a));                
 
             return mock.Object;
         }
@@ -137,6 +137,74 @@ namespace Crackerz
 
             Check.That(result)
                  .Equals(8);
+        }
+
+        [TestMethod]
+        public void SingleRetryNotEnough()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new UnoException(); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(1);
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<UnoException>();
+        }
+
+        [TestMethod]
+        public void TwoRetriesNeeded()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new UnoException(); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(2);
+
+            var result = policy.Execute(() => service.DoSomethingCrucial(7));
+
+            Check.That(result)
+                 .Equals(8);
+        }
+
+        [TestMethod]
+        public void ExceptionUnhandled()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new DosException(0); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(2);
+
+            Check.ThatCode(() => { policy.Execute(() => service.DoSomethingCrucial(7)); })
+                 .Throws<DosException>();
         }
     }
 }
