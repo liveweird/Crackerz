@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using NFluent;
@@ -7,6 +8,14 @@ using Polly;
 
 namespace Crackerz
 {
+    public static class TimeExtensions
+    {
+        public static TimeSpan Millis(this int from)
+        {
+            return TimeSpan.FromMilliseconds(from);
+        }
+    }
+    
     public interface IHighlyAvailableService
     {
         int DoSomethingCrucial(int a);
@@ -203,8 +212,139 @@ namespace Crackerz
                 .Handle<UnoException>()
                 .Retry(2);
 
-            Check.ThatCode(() => { policy.Execute(() => service.DoSomethingCrucial(7)); })
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
                  .Throws<DosException>();
+        }
+
+        [TestMethod]
+        public void TwoDifferentExceptionsHandled()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new DosException(0); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Or<DosException>()
+                .Retry(2);
+
+            var result = policy.Execute(() => service.DoSomethingCrucial(7));
+
+            Check.That(result)
+                 .Equals(8);
+        }
+
+        [TestMethod]
+        public void ContextRetryAction()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new DosException(1); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Or<DosException>()
+                .Retry(3,
+                       (exception,
+                        i,
+                        ctx) => Check.That(ctx[i.ToString(CultureInfo.InvariantCulture)]).Equals(exception.GetType().Name));
+
+            var context = new Dictionary<string, object>();
+            context[1.ToString(CultureInfo.InvariantCulture)] = typeof (UnoException).Name;
+            context[2.ToString(CultureInfo.InvariantCulture)] = typeof (DosException).Name;
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7),
+                                              context);
+                           })
+                 .DoesNotThrow();
+        }
+
+        [TestMethod]
+        public void WaitAndRetry()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new DosException(100); },
+                                a => { throw new DosException(200); },
+                                a => { throw new DosException(300); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<DosException>()
+                .WaitAndRetry(new []
+                              {
+                                  100.Millis(),
+                                  200.Millis(),
+                                  300.Millis()
+                              },
+                              (e,
+                               timeSpan) =>
+                              {
+                                  Check.That(e)
+                                       .IsInstanceOf<DosException>();
+
+                                  var casted = e as DosException;
+
+                                  if (casted != null)
+                                  {
+                                      Check.That(casted.Code * 1.1)
+                                           .IsGreaterThan(timeSpan.TotalMilliseconds);
+
+                                      Check.That(casted.Code * 0.9)
+                                           .IsLessThan(timeSpan.TotalMilliseconds);
+                                  }
+                              });
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .DoesNotThrow();
+        }
+
+        [TestMethod]
+        public void CircuitBreaker()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .CircuitBreaker(2,
+                                100.Millis());
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .DoesNotThrow();
         }
     }
 }
