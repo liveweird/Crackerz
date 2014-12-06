@@ -36,7 +36,7 @@ namespace Crackerz
     }
 
     [TestClass]
-    public class PollySyncTest
+    public class PollyTest
     {
         IHighlyAvailableService GetService(List<Func<int, int>> behaviors)
         {
