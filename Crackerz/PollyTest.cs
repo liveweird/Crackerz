@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using NFluent;
@@ -21,6 +22,7 @@ namespace Crackerz
     public interface IHighlyAvailableService
     {
         int DoSomethingCrucial(int a);
+        Task<int> DoSomethingCrucialAsync(int a);
     }
 
     public class UnoException : Exception { }
@@ -45,6 +47,17 @@ namespace Crackerz
             mock.Setup(a => a.DoSomethingCrucial(It.IsAny<int>()))
                 .Callback((int a) => idx++)
                 .Returns((int a) => behaviors[idx].Invoke(a));                
+
+            return mock.Object;
+        }
+
+        IHighlyAvailableService GetAsyncService(List<Func<int, Task<int>>> behaviors)
+        {
+            var mock = new Mock<IHighlyAvailableService>();
+            var idx = -1;
+            mock.Setup(a => a.DoSomethingCrucialAsync(It.IsAny<int>()))
+                .Callback((int a) => idx++)
+                .Returns((int a) => behaviors[idx].Invoke(a));
 
             return mock.Object;
         }
@@ -423,6 +436,52 @@ namespace Crackerz
                                policy.Execute(() => service.DoSomethingCrucial(7));
                            })
                  .DoesNotThrow();
+        }
+
+        [TestMethod]
+        public void SingleRetryAsyncWorked()
+        {
+            var behaviors = new List<Func<int, Task<int>>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => Task.FromResult(a + 1)
+                            };
+
+
+            var service = GetAsyncService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .RetryAsync(1);
+
+            var result = policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
+
+            Check.That(result.Result)
+                 .Equals(8);
+        }
+
+        [TestMethod]
+        public void SingleRetryAsyncMismatched()
+        {
+            var behaviors = new List<Func<int, Task<int>>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => Task.FromResult(a + 1)
+                            };
+
+
+            var service = GetAsyncService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(1);
+
+            Check.ThatCode(() =>
+                           {
+                               var result = policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
+                               var neverHappens = result.Result;
+                           })
+                 .Throws<AggregateException>();                      
         }
     }
 }
