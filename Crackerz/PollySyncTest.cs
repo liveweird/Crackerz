@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 using NFluent;
 using Polly;
+using Polly.CircuitBreaker;
 
 namespace Crackerz
 {
@@ -329,6 +331,8 @@ namespace Crackerz
             var behaviors = new List<Func<int, int>>
                             {
                                 a => { throw new UnoException(); },
+                                a => { throw new UnoException(); },
+                                a => { throw new UnoException(); },
                                 a => a + 1
                             };
 
@@ -339,6 +343,34 @@ namespace Crackerz
                 .Handle<UnoException>()
                 .CircuitBreaker(2,
                                 100.Millis());
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<UnoException>();
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<UnoException>();
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<BrokenCircuitException>();                      
+            
+            Thread.Sleep(150.Millis());
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<UnoException>();
+
+            Thread.Sleep(150.Millis());
 
             Check.ThatCode(() =>
                            {
