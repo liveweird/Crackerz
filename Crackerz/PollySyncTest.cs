@@ -246,6 +246,52 @@ namespace Crackerz
         }
 
         [TestMethod]
+        public void ConditionFailed()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new DosException(1); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<DosException>(p => p.Code == 0)
+                .Retry(2);
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .Throws<DosException>();
+        }
+
+        [TestMethod]
+        public void ConditionMet()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new DosException(0); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<DosException>(p => p.Code == 0)
+                .Retry(2);
+
+            Check.ThatCode(() =>
+                           {
+                               policy.Execute(() => service.DoSomethingCrucial(7));
+                           })
+                 .DoesNotThrow();
+        }
+
+        [TestMethod]
         public void ContextRetryAction()
         {
             var behaviors = new List<Func<int, int>>
