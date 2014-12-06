@@ -59,7 +59,7 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="PollySyncTest.cs" />
+    <Compile Include="PollyTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

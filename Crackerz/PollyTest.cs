@@ -439,7 +439,7 @@ namespace Crackerz
         }
 
         [TestMethod]
-        public void SingleRetryAsyncWorked()
+        public async Task SingleRetryAsyncWorked()
         {
             var behaviors = new List<Func<int, Task<int>>>
                             {
@@ -454,14 +454,14 @@ namespace Crackerz
                 .Handle<UnoException>()
                 .RetryAsync(1);
 
-            var result = policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
+            var result = await policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
 
-            Check.That(result.Result)
+            Check.That(result)
                  .Equals(8);
         }
 
         [TestMethod]
-        public void SingleRetryAsyncMismatched()
+        public async Task SingleRetryAsyncMismatched()
         {
             var behaviors = new List<Func<int, Task<int>>>
                             {
@@ -476,12 +476,35 @@ namespace Crackerz
                 .Handle<UnoException>()
                 .Retry(1);
 
-            Check.ThatCode(() =>
-                           {
-                               var result = policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
-                               var neverHappens = result.Result;
-                           })
-                 .Throws<AggregateException>();                      
+            Check.ThatAsyncCode(async () =>
+                                      {
+                                          await policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
+                                      })
+                 .Throws<InvalidOperationException>();                      
+        }
+
+        [TestMethod]
+        public async Task SingleRetryAsyncThrows()
+        {
+            var behaviors = new List<Func<int, Task<int>>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => { throw new UnoException(); },
+                                a => Task.FromResult(a + 1)
+                            };
+
+
+            var service = GetAsyncService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .RetryAsync(1);
+
+            Check.ThatAsyncCode(async () =>
+                                      {
+                                          await policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
+                                      })
+                 .Throws<UnoException>();
         }
     }
 }
