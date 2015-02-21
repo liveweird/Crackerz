@@ -461,7 +461,7 @@ namespace Crackerz
         }
 
         [TestMethod]
-        public async Task SingleRetryAsyncMismatched()
+        public void SingleRetryAsyncMismatched()
         {
             var behaviors = new List<Func<int, Task<int>>>
                             {
@@ -484,7 +484,7 @@ namespace Crackerz
         }
 
         [TestMethod]
-        public async Task SingleRetryAsyncThrows()
+        public void SingleRetryAsyncThrows()
         {
             var behaviors = new List<Func<int, Task<int>>>
                             {
