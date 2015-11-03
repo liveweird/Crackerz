@@ -1,0 +1,23 @@
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Moq;
+
+namespace Crackerz
+{
+    interface IHighlyAvailableService
+    {
+        int DoSomethingCrucial(int a);
+    }
+
+    [TestClass]
+    public class PollySyncTest
+    {
+        [TestMethod]
+        public void RetryOnce()
+        {
+            var mock = new Mock<IHighlyAvailableService>();
+            mock.Setup(a => a.DoSomethingCrucial(It.IsAny<int>())).Throws<>()
+
+
+        }
+    }
+}

@@ -325,9 +325,11 @@ namespace Crackerz
                         i,
                         ctx) => Check.That(ctx[i.ToString(CultureInfo.InvariantCulture)]).Equals(exception.GetType().Name));
 
-            var context = new Dictionary<string, object>();
-            context[1.ToString(CultureInfo.InvariantCulture)] = typeof (UnoException).Name;
-            context[2.ToString(CultureInfo.InvariantCulture)] = typeof (DosException).Name;
+            var context = new Dictionary<string, object>
+                          {
+                              [1.ToString(CultureInfo.InvariantCulture)] = typeof (UnoException).Name,
+                              [2.ToString(CultureInfo.InvariantCulture)] = typeof (DosException).Name
+                          };
 
             Check.ThatCode(() =>
                            {
@@ -505,6 +507,30 @@ namespace Crackerz
                                           await policy.ExecuteAsync(() => service.DoSomethingCrucialAsync(7));
                                       })
                  .Throws<UnoException>();
+        }
+
+        [TestMethod]
+        public void CaptureResultOnSingleRetry()
+        {
+            var behaviors = new List<Func<int, int>>
+                            {
+                                a => { throw new UnoException(); },
+                                a => a + 1
+                            };
+
+
+            var service = GetService(behaviors);
+
+            var policy = Policy
+                .Handle<UnoException>()
+                .Retry(1)
+                .ExecuteAndCapture(() => service.DoSomethingCrucial(7));
+
+            Check.That(policy.Outcome)
+                 .Equals(OutcomeType.Successful);
+
+            Check.That(policy.Result)
+                 .Equals(8);
         }
     }
 }
